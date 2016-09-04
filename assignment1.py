@@ -97,6 +97,10 @@ def get_val(X,idx):
     try:
         return X[X['word'] == idx]['count'][0]
     except:
+        try:
+            return X[X['word'] == idx]['weight'][0]
+        except:
+            return 0    
         return 0
 
 def mypairwise_dist(X,Y):
@@ -116,3 +120,66 @@ combined_words = combined_words.rename({'count':'Obama', 'count.1':'Bush'})
 print combined_words.sort('Obama', ascending=False).topk('Obama', 10)['word']
 
 #####################################################
+# Extract the TF-IDF vectors
+tf_idf = load_sparse_csr('data/people_wiki_tf_idf.npz')
+wiki['tf_idf'] = unpack_dict(tf_idf, map_index_to_word)
+model_tf_idf = NearestNeighbors(metric='euclidean', algorithm='brute')
+model_tf_idf.fit(tf_idf)
+distances, indices = model_tf_idf.kneighbors(tf_idf[35817], n_neighbors=10)
+neighbors = sframe.SFrame({'distance':distances.flatten(), 'id':indices.flatten()})
+print wiki.join(neighbors, on='id').sort('distance')[['id', 'name', 'distance']]
+
+def top_words_tf_idf(name):
+    row = wiki[wiki['name'] == name]
+    word_count_table = row[['tf_idf']].stack('tf_idf', new_column_name=['word','weight'])
+    return word_count_table.sort('weight', ascending=False)
+
+obama_tf_idf = top_words_tf_idf('Barack Obama')
+print obama_tf_idf
+
+schiliro_tf_idf = top_words_tf_idf('Phil Schiliro')
+print schiliro_tf_idf
+
+# Quiz Question. Among the words that appear in both Barack Obama and Phil Schiliro, take the 5 that have largest weights in Obama. How many of the articles in the Wikipedia dataset contain all of those 5 words?
+combined_words = obama_tf_idf.join(schiliro_tf_idf, on='word').rename({'weight':'Obama', 'weight.1':'Schiliro'})
+common_words = set(combined_words.sort('Obama', ascending=False).topk('Obama', 5)['word'])
+wiki['has_top_words'] = wiki['word_count'].apply(has_top_words)
+print "Quiz Question. Among the words that appear in both Barack Obama and Phil Schiliro, take the 5 that have largest weights in Obama. How many of the articles in the Wikipedia dataset contain all of those 5 words? => ",
+print wiki['has_top_words'].sum()
+
+###################################
+
+print "Quiz Question. Compute the Euclidean distance between TF-IDF features of Obama and Biden. => ",
+print "Distance Obama/Biden: ", mypairwise_dist(top_words_tf_idf('Barack Obama'), top_words_tf_idf('Joe Biden'))
+
+###################################
+# Comptue length of all documents
+def compute_length(row):
+    return len(row['text'].split(' '))
+wiki['length'] = wiki.apply(compute_length)
+
+# Compute 100 nearest neighbors and display their lengths
+distances, indices = model_tf_idf.kneighbors(tf_idf[35817], n_neighbors=100)
+neighbors = sframe.SFrame({'distance':distances.flatten(), 'id':indices.flatten()})
+nearest_neighbors_euclidean = wiki.join(neighbors, on='id')[['id', 'name', 'length', 'distance']].sort('distance')
+print nearest_neighbors_euclidean
+
+plt.figure(figsize=(10.5,4.5))
+plt.figure(figsize=(10.5,4.5))
+plt.hist(wiki['length'], 50, color='k', edgecolor='None', histtype='stepfilled', normed=True,
+         label='Entire Wikipedia', zorder=3, alpha=0.8)
+plt.hist(nearest_neighbors_euclidean['length'], 50, color='r', edgecolor='None', histtype='stepfilled', normed=True,
+         label='100 NNs of Obama (Euclidean)', zorder=10, alpha=0.8)
+plt.hist(nearest_neighbors_cosine['length'], 50, color='b', edgecolor='None', histtype='stepfilled', normed=True,
+         label='100 NNs of Obama (cosine)', zorder=11, alpha=0.8)
+plt.axvline(x=wiki['length'][wiki['name'] == 'Barack Obama'][0], color='k', linestyle='--', linewidth=4,
+           label='Length of Barack Obama', zorder=2)
+plt.axvline(x=wiki['length'][wiki['name'] == 'Joe Biden'][0], color='g', linestyle='--', linewidth=4,
+           label='Length of Joe Biden', zorder=1)
+plt.axis([0, 1000, 0, 0.04])
+plt.legend(loc='best', prop={'size':15})
+plt.title('Distribution of document length')
+plt.xlabel('# of words')
+plt.ylabel('Percentage')
+plt.rcParams.update({'font.size': 16})
+plt.tight_layout()
