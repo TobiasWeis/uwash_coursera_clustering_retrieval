@@ -10,7 +10,8 @@ import sframe                                                  # see below for i
 from scipy.sparse import csr_matrix                            # sparse matrices
 from sklearn.metrics.pairwise import pairwise_distances        # pairwise distances
 from copy import copy                                          # deep copies
-import matplotlib.pyplot as plt                                # plotting
+import matplotlib.pyplot as plt 
+                               # plotting
 
 '''compute norm of a sparse vector
    Thanks to: Jaiyam Sharma'''
@@ -117,7 +118,8 @@ else:
     
 print wiki[wiki['name'] == 'Barack Obama']
 print "Quiz Question. What is the document id of Barack Obama's article? => ", wiki[wiki['name'] == 'Barack Obama']['id'][0]
-print "Quiz Question. Which bin contains Barack Obama's article? Enter its integer index. => ", table[wiki[wiki['name'] == 'Barack Obama']['id'][0]]
+
+print "Quiz Question. Which bin contains Barack Obama's article? Enter its integer index. => ", model['bin_indices'][35817]
     
 print "Quiz Question. Examine the bit representations of the bins containing Barack Obama and Joe Biden. In how many places do they agree? => ",
 print (model['bin_index_bits'][wiki[wiki['name'] == 'Barack Obama']['id'][0]] == model['bin_index_bits'][wiki[wiki['name'] == 'Joe Biden']['id'][0]]).sum()
@@ -148,7 +150,7 @@ for doc_id in doc_ids:
     doc_tf_idf = corpus[doc_id,:]
     print 'Barack Obama - {0:24s}: {1:f}'.format(wiki[doc_id]['name'], cosine_distance(obama_tf_idf, doc_tf_idf))
     
-
+from itertools import combinations
 def search_nearby_bins(query_bin_bits, table, search_radius=2, initial_candidates=set()):
     """
     For a given query vector and trained LSH model, return all candidate neighbors for
@@ -228,4 +230,66 @@ print query(corpus[35817,:], model, k=10, max_search_radius=3)
 result, num_candidates_considered = query(corpus[35817,:], model, k=10, max_search_radius=3)
 print result.join(wiki[['id', 'name']], on='id').sort('distance')
 
+import time
+num_candidates_history = []
+query_time_history = []
+max_distance_from_query_history = []
+min_distance_from_query_history = []
+average_distance_from_query_history = []
 
+for max_search_radius in xrange(17):
+    start=time.time()
+    # Perform LSH query using Barack Obama, with max_search_radius
+    result, num_candidates = query(corpus[35817,:], model, k=10,
+                                   max_search_radius=max_search_radius)
+    end=time.time()
+    query_time = end-start  # Measure time
+    
+    print 'Radius:', max_search_radius
+    # Display 10 nearest neighbors, along with document ID and name
+    print result.join(wiki[['id', 'name']], on='id').sort('distance')
+    
+    # Collect statistics on 10 nearest neighbors
+    average_distance_from_query = result['distance'][1:].mean()
+    max_distance_from_query = result['distance'][1:].max()
+    min_distance_from_query = result['distance'][1:].min()
+    
+    num_candidates_history.append(num_candidates)
+    query_time_history.append(query_time)
+    average_distance_from_query_history.append(average_distance_from_query)
+    max_distance_from_query_history.append(max_distance_from_query)
+    min_distance_from_query_history.append(min_distance_from_query)
+    
+plt.figure(figsize=(7,4.5))
+plt.plot(num_candidates_history, linewidth=4)
+plt.xlabel('Search radius')
+plt.ylabel('# of documents searched')
+plt.rcParams.update({'font.size':16})
+plt.tight_layout()
+
+plt.figure(figsize=(7,4.5))
+plt.plot(query_time_history, linewidth=4)
+plt.xlabel('Search radius')
+plt.ylabel('Query time (seconds)')
+plt.rcParams.update({'font.size':16})
+plt.tight_layout()
+
+plt.figure(figsize=(7,4.5))
+plt.plot(average_distance_from_query_history, linewidth=4, label='Average of 10 neighbors')
+plt.plot(max_distance_from_query_history, linewidth=4, label='Farthest of 10 neighbors')
+plt.plot(min_distance_from_query_history, linewidth=4, label='Closest of 10 neighbors')
+plt.xlabel('Search radius')
+plt.ylabel('Cosine distance of neighbors')
+plt.legend(loc='best', prop={'size':15})
+plt.rcParams.update({'font.size':16})
+plt.tight_layout()    
+
+print "Quiz Question: smallest search radius that yielded correct NN (Joe Biden) => 2"
+
+print "Quiz Question. Suppose our goal was to produce 10 approximate nearest neighbors \
+whose average distance from the query document is within 0.01 of the average \
+for the true 10 nearest neighbors. For Barack Obama, the true 10 nearest neighbors are on average about 0.77.\
+ What was the smallest search radius for Barack Obama that produced an average\
+ distance of 0.78 or better? => ", np.min(np.where(np.array(average_distance_from_query_history) < 0.78))
+ 
+ 

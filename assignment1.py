@@ -150,7 +150,7 @@ print wiki['has_top_words'].sum()
 ###################################
 
 print "Quiz Question. Compute the Euclidean distance between TF-IDF features of Obama and Biden. => ",
-print "Distance Obama/Biden: ", mypairwise_dist(top_words_tf_idf('Barack Obama'), top_words_tf_idf('Joe Biden'))
+print "Distance Obama/Biden: %.3f" % mypairwise_dist(top_words_tf_idf('Barack Obama'), top_words_tf_idf('Joe Biden'))
 
 ###################################
 # Comptue length of all documents
